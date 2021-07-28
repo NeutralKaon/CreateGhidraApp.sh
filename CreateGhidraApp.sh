@@ -1,5 +1,7 @@
 #!/bin/sh
 
+set -eu
+
 create_iconset() {
 	mkdir -p Ghidra.iconset
 	cat << EOF > Ghidra.iconset/Contents.json
@@ -78,8 +80,6 @@ EOF
 		convert "$1" -resize "${size}x${size}" "Ghidra.iconset/icon_${size}x${size}.png"
 	done
 }
-
-set -eu
 
 if [ $# -ne 1 ]; then
 	echo "Usage: $0 [path to ghidra folder]" >&2
@@ -306,4 +306,91 @@ public class GhidraFileChooser extends DialogComponentProvider {
 EOF
 
 javac -cp "$(find Ghidra.app -regex '.*\.jar' | tr '\n' ':')" docking/widgets/filechooser/GhidraFileChooser.java
-cp -R docking GhidraFileChooser.class Ghidra.app/Contents/Resources/Ghidra/ghidra/patch/
+cp -R docking Ghidra.app/Contents/Resources/Ghidra/ghidra/patch/
+
+cat << EOF > OpenGhidra.java
+import com.sun.tools.attach.VirtualMachine;
+import com.sun.tools.attach.VirtualMachineDescriptor;
+import java.io.File;
+
+public class OpenGhidra {
+	public static void main(String[] args) throws Exception {
+		Runtime.getRuntime().exec(new String[] {"open", "-a", "Ghidra"});
+		while (true) {
+			for (VirtualMachineDescriptor descriptor : VirtualMachine.list()) {
+				if (descriptor.displayName().contains("ghidra.GhidraLauncher")) {
+					VirtualMachine vm = VirtualMachine.attach(descriptor.id());
+					for (String arg : args) {
+						vm.loadAgent(OpenGhidra.class.getProtectionDomain().getCodeSource().getLocation().getPath() + "/OpenGhidra.jar", new File(arg).getAbsolutePath());
+					}
+					vm.detach();
+					return;
+				}
+			}
+		}
+	}
+}
+EOF
+javac OpenGhidra.java
+cp OpenGhidra.class Ghidra.app/Contents/Resources
+cat << EOF > OpenGhidraAgent.java
+import ghidra.app.services.ProgramManager;
+import ghidra.formats.gfilesystem.FileSystemService;
+import ghidra.framework.main.AppInfo;
+import ghidra.plugin.importer.ImporterUtilities;
+import java.awt.Frame;
+import java.awt.Menu;
+import java.awt.MenuItem;
+import java.io.File;
+import java.util.Timer;
+import java.util.TimerTask;
+
+public class OpenGhidraAgent {
+	private static boolean checkMenuForReadiness(MenuItem menuItem) {
+		if (menuItem.getLabel().contains("Import File") && menuItem.isEnabled()) {
+			return true;
+		} else if (menuItem instanceof Menu) {
+			var menu = (Menu)menuItem;
+			for (int i = 0; i < menu.getItemCount(); ++i) {
+				if (checkMenuForReadiness(menu.getItem(i))) {
+					return true;
+				}
+			}
+		}
+		return false;
+	}
+
+	public static void agentmain(String agentArgs) {
+		Timer timer = new Timer();
+		timer.schedule(new TimerTask() {
+			@Override
+			public void run() {
+				for (var frame : Frame.getFrames()) {
+					var menuBar = frame.getMenuBar();
+					if (menuBar == null) {
+						continue;
+					}
+					for (int i = 0; i < menuBar.getMenuCount(); ++i) {
+						if (checkMenuForReadiness(menuBar.getMenu(i))) {
+							var file = new File(agentArgs);
+							var tool = AppInfo.getFrontEndTool();
+							var manager = tool.getService(ProgramManager.class);
+							var fsrl = FileSystemService.getInstance().getLocalFSRL(file);
+							var folder = AppInfo.getActiveProject().getProjectData().getRootFolder();
+							ImporterUtilities.showImportDialog(tool, manager, fsrl, folder, null);
+							timer.cancel();
+							return;
+						}
+					}
+				}
+			}
+		}, 0, 100);
+	}
+}
+EOF
+javac -cp "$(find Ghidra.app -regex '.*\.jar' | tr '\n' ':')" OpenGhidraAgent.java
+cat << EOF > manifest
+Agent-Class: OpenGhidraAgent
+EOF
+jar --create --file OpenGhidra.jar --manifest manifest OpenGhidraAgent*.class
+cp OpenGhidra.jar Ghidra.app/Contents/Resources
