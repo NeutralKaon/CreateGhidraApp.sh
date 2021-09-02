@@ -31,5 +31,5 @@ wget 'https://github.com/NationalSecurityAgency/ghidra/releases/download/Ghidra_
 unzip Ghidra_10.0.2.zip
 ./CreateGhidraApp.sh ./ghidra_10.0.2_PUBLIC
 ```
-
+I have created this as a repo (as well as forking the gist) entirely for the purpose of uploading a release binary. 
 Enjoy!
