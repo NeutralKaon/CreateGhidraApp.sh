@@ -87,8 +87,9 @@ if [ $# -ne 1 ]; then
 fi
 
 mkdir -p Ghidra.app/Contents/MacOS
-cat << EOF | clang -x objective-c -fmodules -framework Foundation -o Ghidra.app/Contents/MacOS/Ghidra -
+cat << EOF | /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/clang -x objective-c -fmodules -framework Foundation -isysroot /Applications/Xcode.app//Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk -o Ghidra.app/Contents/MacOS/Ghidra -
 @import Foundation;
+
 
 int main() {
 	execl([NSBundle.mainBundle.resourcePath stringByAppendingString:@"/ghidra/ghidraRun"].UTF8String, NULL);
@@ -100,7 +101,7 @@ cp -R "$(echo "$1" | sed s,/*$,,)" Ghidra.app/Contents/Resources/ghidra
 sed "s/bg Ghidra/fg Ghidra/" < "$1/ghidraRun" > Ghidra.app/Contents/Resources/ghidra/ghidraRun
 sed "s/apple.laf.useScreenMenuBar=false/apple.laf.useScreenMenuBar=true/" < "$1/support/launch.properties" > Ghidra.app/Contents/Resources/ghidra/support/launch.properties
 echo "APPL????" > Ghidra.app/Contents/PkgInfo
-jar -x -f Ghidra.app/Contents/Resources/ghidra/Ghidra/Framework/Generic/lib/Generic.jar images/GhidraIcon256.png
+jar xf Ghidra.app/Contents/Resources/ghidra/Ghidra/Framework/Generic/lib/Generic.jar images/GhidraIcon256.png
 if [ "$( (sw_vers -productVersion; echo "11.0") | sort -V | head -n 1)" = "11.0" ]; then
 	convert \( -size 1024x1024 canvas:none -fill white -draw 'roundRectangle 100,100 924,924 180,180' \) \( +clone -background black -shadow 25x12+0+12 \) +swap -background none -layers flatten -crop 1024x1024+0+0 \( images/GhidraIcon256.png -resize 704x704 -gravity center \) -composite GhidraIcon.png
 else
@@ -109,7 +110,7 @@ fi
 create_iconset GhidraIcon.png
 for size in 16 24 32 40 48 64 128 256; do
 	convert GhidraIcon.png -resize "${size}x${size}" "images/GhidraIcon${size}.png"
-	jar -u -f Ghidra.app/Contents/Resources/ghidra/Ghidra/Framework/Generic/lib/Generic.jar "images/GhidraIcon${size}.png"
+	jar uf Ghidra.app/Contents/Resources/ghidra/Ghidra/Framework/Generic/lib/Generic.jar "images/GhidraIcon${size}.png"
 done
 
 iconutil -c icns Ghidra.iconset
